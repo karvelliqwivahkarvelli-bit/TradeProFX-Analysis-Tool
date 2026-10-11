@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeProFX Matches & Differs Analysis Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Trading interface analysis</p>
+          <h1>TradeProFX Matches & Differs Analysis Tool</h1>
+        </div>
+        <div class="market-badge">
+          <span class="badge-dot"></span>
+          App ID: <strong>63379</strong>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel controls-panel">
+          <div class="control-group">
+            <label for="marketSelect">Market</label>
+            <select id="marketSelect">
+              <option value="volatility10">Volatility Index 10</option>
+              <option value="volatility25">Volatility Index 25</option>
+              <option value="volatility50">Volatility Index 50</option>
+              <option value="volatility75">Volatility Index 75</option>
+              <option value="volatility100">Volatility Index 100</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="tickCountSelect">Number of ticks</label>
+            <select id="tickCountSelect">
+              <option value="20">20 ticks</option>
+              <option value="30">30 ticks</option>
+              <option value="50">50 ticks</option>
+              <option value="75">75 ticks</option>
+              <option value="100">100 ticks</option>
+            </select>
+          </div>
+
+          <div class="control-group button-group">
+            <button id="fetchDataBtn" class="primary-btn">Fetch real market data</button>
+          </div>
+        </section>
+
+        <section class="panel live-panel">
+          <div class="panel-head">
+            <div class="status-group">
+              <span class="live-dot"></span>
+              <span>Live market flow</span>
+            </div>
+            <span id="activeMarketLabel" class="market-tag">Volatility Index 10</span>
+          </div>
+
+          <div class="live-wheel-wrap">
+            <div class="ticker-pointer" aria-hidden="true"></div>
+            <div id="digitWheel" class="digit-wheel" aria-label="Digit wheel"></div>
+          </div>
+
+          <div class="current-digit-box">
+            <span>Current last digit</span>
+            <div id="currentDigitDisplay" class="current-digit">0</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title-row">
+            <h2>Digit probability analysis</h2>
+          </div>
+          <div id="digitProbabilityGrid" class="digit-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-title-row">
+            <h2>Display tick history</h2>
+          </div>
+          <div id="tickHistoryList" class="tick-history" aria-live="polite"></div>
+        </section>
+
+        <section class="panel metric-panel">
+          <div class="metric-card accent-green">
+            <span>Most appearing number</span>
+            <strong id="mostFrequentDigit">0</strong>
+          </div>
+          <div class="metric-card accent-red">
+            <span>Least likely digit</span>
+            <strong id="leastLikelyDigit">0</strong>
+          </div>
+          <div class="metric-card accent-yellow">
+            <span>Probability rate</span>
+            <strong id="probabilityRate">0%</strong>
+          </div>
+        </section>
+
+        <section class="panel prediction-panel">
+          <div class="section-title-row">
+            <h2>Predicted digit signal</h2>
+          </div>
+          <div id="predictionSummary" class="prediction-summary"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
