@@ -2,20 +2,20 @@ const APP_ID = 63379;
 const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 const marketProfiles = {
-  volatility10: { label: 'Volatility Index 10', weights: [0.17, 0.14, 0.12, 0.1, 0.11, 0.08, 0.08, 0.09, 0.06, 0.05] },
-  volatility25: { label: 'Volatility Index 25', weights: [0.14, 0.15, 0.13, 0.11, 0.09, 0.09, 0.08, 0.08, 0.07, 0.06] },
-  volatility50: { label: 'Volatility Index 50', weights: [0.12, 0.11, 0.14, 0.13, 0.12, 0.1, 0.09, 0.08, 0.06, 0.05] },
-  volatility75: { label: 'Volatility Index 75', weights: [0.1, 0.12, 0.14, 0.12, 0.13, 0.1, 0.1, 0.09, 0.06, 0.04] },
-  volatility100: { label: 'Volatility Index 100', weights: [0.09, 0.11, 0.13, 0.13, 0.14, 0.11, 0.1, 0.09, 0.06, 0.04] }
+  volatility10: { label: 'Volatility Index 10', stream: 'R_10' },
+  volatility25: { label: 'Volatility Index 25', stream: 'R_25' },
+  volatility50: { label: 'Volatility Index 50', stream: 'R_50' },
+  volatility75: { label: 'Volatility Index 75', stream: 'R_75' },
+  volatility100: { label: 'Volatility Index 100', stream: 'R_100' }
 };
 
 const state = {
-  market: 'volatility10',
-  tickCount: 30,
+  market: 'volatility50',
+  tickCount: 50,
   history: [],
   liveDigit: 0,
-  intervalId: null,
-  lastRealtimeUpdate: null
+  wsConnection: null,
+  isLiveConnected: false
 };
 
 const marketSelect = document.getElementById('marketSelect');
@@ -31,42 +31,39 @@ const probabilityRate = document.getElementById('probabilityRate');
 const predictionSummary = document.getElementById('predictionSummary');
 const fetchDataBtn = document.getElementById('fetchDataBtn');
 
-function weightedRandomDigit(weights) {
-  const total = weights.reduce((sum, value) => sum + value, 0);
-  let threshold = Math.random() * total;
-
-  for (let i = 0; i < weights.length; i += 1) {
-    threshold -= weights[i];
-    if (threshold <= 0) return digits[i];
-  }
-
-  return digits[digits.length - 1];
+function extractLastDigit(price) {
+  if (price === null || price === undefined || price === '') return 0;
+  const cleaned = String(price).replace(/[^0-9.]/g, '');
+  const lastChar = cleaned[cleaned.length - 1];
+  return Number(lastChar) || 0;
 }
 
-function getMarketProfile() {
-  return marketProfiles[state.market];
+function getDigitFrequencyMap() {
+  const map = {};
+  digits.forEach((digit) => {
+    map[digit] = state.history.filter((value) => value === digit).length;
+  });
+  return map;
 }
 
-function seedHistory() {
-  const count = state.tickCount;
-  const weights = getMarketProfile().weights;
-  state.history = Array.from({ length: count }, () => weightedRandomDigit(weights));
-  state.liveDigit = state.history[state.history.length - 1];
+function getMostFrequentDigit() {
+  const freqMap = getDigitFrequencyMap();
+  const entries = Object.entries(freqMap);
+  if (!entries.length) return 0;
+  const [digit] = entries.reduce((best, current) => (current[1] > best[1] ? current : best), entries[0]);
+  return Number(digit);
 }
 
-function addNewTick() {
-  const weights = getMarketProfile().weights;
-  const nextDigit = weightedRandomDigit(weights);
-  state.history.push(nextDigit);
-  if (state.history.length > state.tickCount) {
-    state.history.shift();
-  }
-  state.liveDigit = nextDigit;
-  render();
+function getLeastLikelyDigit() {
+  const freqMap = getDigitFrequencyMap();
+  const entries = Object.entries(freqMap);
+  if (!entries.length) return 0;
+  const [digit] = entries.reduce((best, current) => (current[1] < best[1] ? current : best), entries[0]);
+  return Number(digit);
 }
 
 function updateMarketLabel() {
-  activeMarketLabel.textContent = getMarketProfile().label;
+  activeMarketLabel.textContent = marketProfiles[state.market].label;
 }
 
 function renderDigitWheel() {
@@ -93,30 +90,6 @@ function renderDigitWheel() {
 
     digitWheel.appendChild(item);
   });
-}
-
-function getDigitFrequencyMap() {
-  const map = {};
-  digits.forEach((digit) => {
-    map[digit] = state.history.filter((value) => value === digit).length;
-  });
-  return map;
-}
-
-function getMostFrequentDigit() {
-  const freqMap = getDigitFrequencyMap();
-  const entries = Object.entries(freqMap);
-  if (!entries.length) return 0;
-  const [digit] = entries.reduce((best, current) => (current[1] > best[1] ? current : best), entries[0]);
-  return Number(digit);
-}
-
-function getLeastLikelyDigit() {
-  const freqMap = getDigitFrequencyMap();
-  const entries = Object.entries(freqMap);
-  if (!entries.length) return 0;
-  const [digit] = entries.reduce((best, current) => (current[1] < best[1] ? current : best), entries[0]);
-  return Number(digit);
 }
 
 function renderProbabilityGrid() {
@@ -146,7 +119,6 @@ function renderProbabilityGrid() {
     }
 
     const fillWidth = Math.max(7, percentage);
-
     card.innerHTML = `
       <div class="digit-header">
         <span class="digit-label">${digit}</span>
@@ -169,14 +141,13 @@ function renderProbabilityGrid() {
   predictionSummary.innerHTML = `
     <div class="summary-badge">${least}</div>
     <div class="summary-text">
-      The market digit signal suggests <strong>${least}</strong> is the least likely number to appear next in the <strong>${getMarketProfile().label}</strong> flow.
+      The market digit signal suggests <strong>${least}</strong> is the least likely number to appear next in the <strong>${marketProfiles[state.market].label}</strong> live tick flow.
       Meanwhile, <strong>${most}</strong> is the dominant number, currently showing the strongest frequency in the live tick window.
     </div>
   `;
-};
+}
 
 function renderHistory() {
-  const freqMap = getDigitFrequencyMap();
   const most = getMostFrequentDigit();
   const current = state.liveDigit;
 
@@ -212,70 +183,135 @@ function render() {
   currentDigitDisplay.textContent = state.liveDigit;
 }
 
-async function fetchMarketData() {
-  const profile = getMarketProfile();
-  const endpoint = `https://api.marketdata.example.com/v1/last-digit?app_id=${APP_ID}&market=${state.market}`;
+function seedHistoryFromArray(values) {
+  state.history = values.slice(-state.tickCount);
+  if (state.history.length === 0) {
+    state.history = Array.from({ length: state.tickCount }, () => 0);
+  }
+  state.liveDigit = Number(state.history[state.history.length - 1]) || 0;
+  render();
+}
+
+async function fetchHistoricalTicks() {
+  const payload = {
+    ticks_history: marketProfiles[state.market].stream,
+    adjust_start_time: 1,
+    count: state.tickCount,
+    end: 'latest',
+    start: 1,
+    style: 'ticks'
+  };
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json'
-      }
+    const response = await fetch('https://ws.derivws.com/websockets/v3?app_id=63379', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      throw new Error(`Real feed unavailable (${response.status})`);
+      throw new Error(`API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const digitsFromFeed = Array.isArray(data?.digits) ? data.digits : [];
+    const history = Array.isArray(data?.ticks_history) ? data.ticks_history : [];
 
-    if (digitsFromFeed.length === 0) {
-      throw new Error('No real tick digits returned');
+    if (history.length > 0) {
+      const digitsList = history.map((tick) => {
+        const quote = tick.quote ?? tick.close ?? tick.price ?? 0;
+        return extractLastDigit(quote);
+      });
+
+      seedHistoryFromArray(digitsList);
+      fetchDataBtn.textContent = 'Historical data loaded';
+      return true;
     }
-
-    state.history = digitsFromFeed.slice(-state.tickCount);
-    state.liveDigit = Number(digitsFromFeed[digitsFromFeed.length - 1]);
-
-    render();
-    fetchDataBtn.textContent = 'Real data connected';
   } catch (error) {
-    const fallbackDigit = weightedRandomDigit(profile.weights);
-    state.history = Array.from({ length: state.tickCount }, () => weightedRandomDigit(profile.weights));
-    state.history[state.history.length - 1] = fallbackDigit;
-    state.liveDigit = fallbackDigit;
-    render();
-    fetchDataBtn.textContent = 'Fallback mode active';
+    console.error('Historical tick fetch failed:', error);
+    fetchDataBtn.textContent = 'Fallback mode';
+  }
+
+  return false;
+}
+
+function connectWebSocket() {
+  if (state.wsConnection && state.wsConnection.readyState === WebSocket.OPEN) {
+    return;
+  }
+
+  try {
+    state.wsConnection = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=63379');
+
+    state.wsConnection.onopen = () => {
+      state.isLiveConnected = true;
+      fetchDataBtn.textContent = 'Live stream active';
+      state.wsConnection.send(JSON.stringify({
+        ticks: marketProfiles[state.market].stream,
+        subscribe: 1
+      }));
+    };
+
+    state.wsConnection.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload && payload.tick) {
+          const quote = payload.tick.quote ?? payload.tick.close ?? payload.tick.price ?? 0;
+          const digit = extractLastDigit(quote);
+          state.history.push(digit);
+          if (state.history.length > state.tickCount) {
+            state.history.shift();
+          }
+          state.liveDigit = digit;
+          render();
+        }
+      } catch (error) {
+        console.error('WS message parse error:', error);
+      }
+    };
+
+    state.wsConnection.onerror = () => {
+      fetchDataBtn.textContent = 'WebSocket error';
+    };
+
+    state.wsConnection.onclose = () => {
+      state.isLiveConnected = false;
+      fetchDataBtn.textContent = 'Stream closed';
+    };
+  } catch (error) {
+    console.error('WebSocket connection failed:', error);
   }
 }
 
-function applyTickSelection() {
-  state.tickCount = Number(tickCountSelect.value);
-  seedHistory();
-  render();
-}
-
-function applyMarketSelection() {
+function onMarketChange() {
   state.market = marketSelect.value;
-  seedHistory();
+  if (state.wsConnection) {
+    state.wsConnection.close();
+    state.wsConnection = null;
+  }
+  fetchHistoricalTicks().then(() => connectWebSocket());
+}
+
+function onTickCountChange() {
+  state.tickCount = Number(tickCountSelect.value);
+  if (state.history.length > state.tickCount) {
+    state.history = state.history.slice(-state.tickCount);
+  }
   render();
 }
 
-marketSelect.addEventListener('change', applyMarketSelection);
-tickCountSelect.addEventListener('change', applyTickSelection);
-fetchDataBtn.addEventListener('click', fetchMarketData);
-
-function startMarketSimulation() {
-  if (state.intervalId) {
-    clearInterval(state.intervalId);
+fetchDataBtn.addEventListener('click', async () => {
+  fetchDataBtn.textContent = 'Loading...';
+  const ok = await fetchHistoricalTicks();
+  if (ok) {
+    connectWebSocket();
   }
+});
 
-  state.intervalId = setInterval(() => {
-    addNewTick();
-  }, 1350);
-}
+marketSelect.addEventListener('change', onMarketChange);
+tickCountSelect.addEventListener('change', onTickCountChange);
 
-seedHistory();
-render();
-startMarketSimulation();
+window.addEventListener('load', async () => {
+  render();
+  await fetchHistoricalTicks();
+  connectWebSocket();
+});
